@@ -88,7 +88,7 @@ var KEY='juniorBills.v1';
 var BUDGET_URL='https://gindisandbox.github.io/Junior-s-Budget/'; /* optional: web address of Junior's Budget; shows a link on the first screen when filled in */
 var CARS=['Car gas','Car insurance','Car maintenance'];
 var DTYPES=['Credit card','Car loan','Student loan','Other loan'];
-var VERSION='1.1';
+var VERSION='1.2';
 
 /* ---------- helpers ---------- */
 var app=document.getElementById('app');
@@ -123,7 +123,7 @@ function ask(o){
 function numIn(id,val,ph){var i=h('input',{type:'text',inputmode:'decimal',id:id,placeholder:ph||'0',autocomplete:'off'});if(val!=null&&val!=='')i.value=String(Math.round(val*100)/100);return i;}
 
 /* ---------- data: a small copy of each budget (names and amounts only) plus its bills ---------- */
-var db=[],storageOk=true;
+var db=[],storageOk=true,notice='';
 function cleanBills(a){return (Array.isArray(a)?a.slice(0,100):[]).map(function(x){x=x||{};var kd=['exp','extra','debt'].indexOf(x.kind)>=0?x.kind:'exp',dd=Math.round(Number(x.day));return {id:str(x.id,40)||uid(),kind:kd,ref:str(x.ref,60),day:(dd>=1&&dd<=31)?dd:1,paid:/^\d{4}-\d{2}$/.test(String(x.paid||''))?x.paid:'',added:str(x.added,10)};}).filter(function(x){return x.ref;});}
 function clean(b){
   if(!b||typeof b!=='object')return null;
@@ -255,17 +255,18 @@ function loadText(t,status){try{var o=JSON.parse(t);var list=Array.isArray(o)?o:
   catch(e){status.textContent='That does not look like a Junior\'s Budget backup.';return 0;}}
 function backupScreen(){
   hist=[];view=[backupScreen];app.textContent='';
-  var status=h('p',{class:'note',role:'status'});
+  var status=h('p',{class:'note',role:'status',style:'font-weight:700'});
   var out=h('textarea',{id:'f-out',readonly:true,'aria-label':'Backup text'});out.value=backupJson();
   var inp=h('textarea',{id:'f-in','aria-label':'Paste backup text here',placeholder:'Paste backup text here'});
   var file=h('input',{type:'file',id:'f-file',accept:'.json,application/json,text/plain'});
-  file.addEventListener('change',function(){var f=file.files&&file.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){loadText(String(rd.result),status);out.value=backupJson();};rd.readAsText(f);});
-  app.append(h('h1',{text:'Open or save'}),
+  function done(n){if(n){notice='Opened your budget. Tap it below to add bills and due dates.';home();}else{window.scrollTo(0,0);}}
+  file.addEventListener('change',function(){var f=file.files&&file.files[0];if(!f)return;status.textContent='Reading '+f.name+'...';var rd=new FileReader();rd.onerror=function(){status.textContent='Could not read that file. Try Copy backup text and paste it instead.';window.scrollTo(0,0);};rd.onload=function(){var n=loadText(String(rd.result),status);file.value='';done(n);};rd.readAsText(f);});
+  app.append(h('h1',{text:'Open or save'}),status,
     h('div',{class:'card'},h('h2',{text:'Open my budget'}),
       h('p',{class:'hint',text:'In Junior\'s Budget, tap Save or load a backup, then Save a file to my phone. Come back here and choose that file. Opening a newer file later updates the amounts and keeps your bills.'}),
       h('div',{class:'stack'},h('label',{for:'f-file',text:'Choose a budget backup file'}),file,
         h('label',{for:'f-in',text:'Or paste backup text'}),inp,
-        h('button',{onclick:function(){if(inp.value.trim()){if(loadText(inp.value,status))inp.value='';}else status.textContent='Paste backup text first, or choose a file.';},text:'Open pasted text'}))),
+        h('button',{onclick:function(){if(inp.value.trim()){done(loadText(inp.value,status));}else{status.textContent='Paste backup text first, or choose a file.';window.scrollTo(0,0);}},text:'Open pasted text'}))),
     h('div',{class:'card'},h('h2',{text:'Save a backup of my bills'}),
       h('p',{class:'hint',text:'This keeps a copy of your bills and due dates in case this phone clears its data. You can open it here again later.'}),
       h('div',{class:'stack'},
@@ -273,13 +274,14 @@ function backupScreen(){
         h('button',{class:'ghost',onclick:function(){out.focus();out.select();var done=function(){markBackup();status.textContent='Copied. Paste it into the Notes app to keep it.';};
           if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(out.value).then(done,function(){status.textContent='Text is selected. Tap Copy in the pop-up.';});}else{status.textContent='Text is selected. Tap Copy in the pop-up.';}},text:'Copy backup text'}),
         out)),
-    status,h('button',{class:'ghost',style:'width:100%',onclick:home,text:'Back to home'}));}
+    h('button',{class:'ghost',style:'width:100%',onclick:home,text:'Back to home'}));}
 
 /* ---------- home ---------- */
 function home(){
   hist=[];view=null;cur=null;app.textContent='';
   app.append(h('h1',{text:"Junior's Bills"}),h('p',{class:'hint',text:'Due dates and reminders for the bills in your Junior\'s Budget. Everything is saved only on this phone.'}));
   if(!storageOk)app.append(h('div',{class:'card warn'},h('p',{text:'This phone is not letting the page save. Use Open or save to keep a backup file.'})));
+  if(notice){app.append(h('div',{class:'card',style:'border-left:6px solid var(--green);padding-left:12px'},h('p',{style:'margin:0;font-weight:700',text:notice})));notice='';}
   var bn=billBanner();if(bn)app.append(bn);
   var st=staleBudget();if(st)app.append(h('div',{class:'card warn'},h('p',{text:'Your copy of "'+st.name+'" is '+st.days+' days old. If you changed your budget since then, save a new backup in Junior\'s Budget and open it here.'}),h('button',{class:'ghost',onclick:backupScreen,text:'Open a newer backup'})));
   var due=backupDue();if(due)app.append(h('div',{class:'card warn'},h('p',{text:(due.never?'You have not saved a backup of your bills yet. ':'It has been '+due.days+' days since your last backup. ')+'A backup protects your due dates if this phone clears its data.'}),h('div',{class:'row'},h('button',{class:'green',onclick:backupScreen,text:'Back up now'}),h('button',{class:'ghost',onclick:function(){lsSet(SN,String(Date.now()+3*864e5));home();},text:'Remind me in 3 days'}))));
