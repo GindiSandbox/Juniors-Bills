@@ -88,7 +88,7 @@ var KEY='juniorBills.v1';
 var BUDGET_URL='https://gindisandbox.github.io/Junior-s-Budget/'; /* optional: web address of Junior's Budget; shows a link on the first screen when filled in */
 var CARS=['Car gas','Car insurance','Car maintenance'];
 var DTYPES=['Credit card','Car loan','Student loan','Other loan'];
-var VERSION='1.2';
+var VERSION='1.4';
 
 /* ---------- helpers ---------- */
 var app=document.getElementById('app');
@@ -203,6 +203,7 @@ function billsScreen(){
     h('p',{class:'hint',text:'Make a calendar file. Open it and your phone offers to add each bill to your calendar, with an alert the day before and on the day. It covers the next 12 months. If you change a bill later, make a new file. The file stays on your phone.'}),
     h('button',{class:'ghost',onclick:function(){saveIcs(status);},text:'Make a calendar file'}),status));
   app.append(h('div',{class:'stack',style:'margin-top:14px'},h('button',{class:'ghost',onclick:home,text:'Back to home'}),
+    BUDGET_URL?h('a',{class:'btn ghost',href:BUDGET_URL,style:'display:block;text-decoration:none;line-height:34px',text:"Open Junior's Budget"}):null,
     h('button',{class:'ghost',onclick:function(){go(removeBudget);},text:'Remove this budget from here'})));}
 function removeBudget(){app.append(h('div',{class:'card'},h('h2',{text:'Remove "'+cur.name+'" from here?'}),
   h('p',{class:'hint',text:'This removes its bills and due dates from Junior\'s Bills. Your budget in Junior\'s Budget is not touched. You can open the backup again later, but the bills would need to be set up again.'}),
@@ -215,7 +216,8 @@ function billPick(){
   app.append(h('h1',{text:'Add a bill'}),h('p',{class:'hint',text:'Which one is a bill with a due date? These are the expenses and debt payments in your budget.'}));
   if(!opts.length)app.append(h('p',{class:'hint',text:'Nothing left to add. Every expense and debt payment with an amount is already a bill.'}));
   opts.forEach(function(o){app.append(h('button',{class:'choice',style:'width:100%;margin-bottom:10px',onclick:function(){go(billDay,{kind:o.kind,ref:o.ref});}},h('span',{text:o.label}),h('br'),h('span',{class:'hint',text:money(o.amt)+' a month'})));});
-  app.append(h('button',{class:'ghost',style:'width:100%',onclick:back,text:'Back'}));}
+  app.append(h('div',{class:'card warn',style:'margin-top:6px'},h('p',{style:'margin:0 0 8px;font-weight:700',text:'Bill not listed?'}),h('p',{class:'hint',style:'margin:0',text:'Go back to Junior\'s Budget and add it as an expense with an amount (or as a debt). Save a new backup there. Then return here and open that backup.'}),BUDGET_URL?h('a',{class:'btn ghost',href:BUDGET_URL,style:'display:block;text-decoration:none;line-height:34px;margin-top:12px',text:"Open Junior's Budget"}):null),
+    h('button',{class:'ghost',style:'width:100%',onclick:back,text:'Back'}));}
 function billDay(arg){
   var ex=arg.id?cur.bills.filter(function(x){return x.id===arg.id;})[0]:null,nm=ex?ex.ref:arg.ref;
   ask({eyebrow:'Bills',title:'Which day of the month is "'+nm+'" due?',hint:'Type a number from 1 to 31. If a month is shorter, the last day of that month is used.',label:'Day of the month',input:numIn('f-bday',ex?ex.day:'','Example: 5'),
