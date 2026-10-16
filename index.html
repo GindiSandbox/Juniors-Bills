@@ -41,6 +41,7 @@ p{margin:0 0 1rem}
 .row>*{flex:1 1 140px;min-width:0}
 button,.btn{font:inherit;font-weight:700;min-height:58px;padding:12px 18px;border-radius:12px;border:2px solid transparent;cursor:pointer;background:var(--accent);color:var(--accent-fg);text-align:center}
 button.ghost{background:var(--ghost);color:var(--fg);border-color:var(--line)}
+a.btn.ghost{background:var(--ghost);color:var(--fg);border:2px solid var(--line);border-radius:12px;padding:12px 18px;text-align:center;min-height:58px;box-sizing:border-box}
 button.green{background:#27599b;color:var(--on-color)}
 button.danger{background:var(--red);color:var(--on-color)}
 button.choice{text-align:left;background:var(--surface);color:var(--fg);border-color:var(--line)}
@@ -84,10 +85,10 @@ select{font:inherit;width:100%;min-height:58px;padding:12px 14px;border-radius:1
 (function(){
 'use strict';
 var KEY='juniorBills.v1';
-var BUDGET_URL=''; /* optional: web address of Junior's Budget; shows a link on the first screen when filled in */
+var BUDGET_URL='https://gindisandbox.github.io/Junior-s-Budget/'; /* optional: web address of Junior's Budget; shows a link on the first screen when filled in */
 var CARS=['Car gas','Car insurance','Car maintenance'];
 var DTYPES=['Credit card','Car loan','Student loan','Other loan'];
-var VERSION='1.0';
+var VERSION='1.1';
 
 /* ---------- helpers ---------- */
 var app=document.getElementById('app');
@@ -290,7 +291,7 @@ function home(){
     var list=h('div',{class:'stack'});
     db.forEach(function(b){var n=b.bills.length;list.append(h('button',{class:'choice',onclick:function(){cur=b;hist=[];show([billsScreen]);}},h('span',{text:b.name}),h('br'),h('span',{class:'hint',text:n?n+' bill'+(n===1?'':'s'):'No bills yet'})));});
     app.append(h('div',{class:'card'},h('h2',{text:'Your budgets'}),list));}
-  app.append(h('div',{class:'stack'},h('button',{class:db.length?'ghost':'green',onclick:backupScreen,text:db.length?'Open or save':'Open my budget'})),
+  app.append(h('div',{class:'stack'},h('button',{class:db.length?'ghost':'green',onclick:backupScreen,text:db.length?'Open or save':'Open my budget'}),db.length&&BUDGET_URL?h('a',{class:'btn ghost',href:BUDGET_URL,style:'display:block;text-decoration:none;line-height:34px',text:"Open Junior's Budget"}):null),
     h('p',{class:'note',style:'margin-top:18px',text:'Tip: add this page to your Home Screen so it opens like an app (on iPhone, tap the Share button, then Add to Home Screen). Nobody else can see your bills.'}),h('p',{class:'note',text:'Version '+VERSION}));}
 
 if(!lsGet(FS))lsSet(FS,String(Date.now()));
