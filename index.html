@@ -2,8 +2,6 @@
 <meta name="theme-color" content="#1f7a3d"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Junior's Bills">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-180.png">
 <title>Junior's Bills</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
 <style>
 /* Layout: one narrow column, one question per screen, big tap targets; results screen = banner, pie, legend, debts, sticky action bar.
    Type: Atkinson Hyperlegible (made for low-vision readers) in two weights for every role. */
@@ -13,7 +11,7 @@
   --green:#1f7a3d; --red:#b71c1c; --orange:#e8790c; --on-color:#ffffff;
   --x-outline:#ffffff; --x-core:#111111; --on-orange:#1b2531;
   --s1:#3a6ea5; --s2:#7b4fa3; --s3:#2a9d8f; --s4:#d4a72c; --s5:#8d6e63; --s6:#d9628f; --s7:#6c757d; --s8:#1d3557;
-  --font:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --font:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#121820; --surface:#1b2430; --fg:#e9eef3; --muted:#9eabb9; --line:#2d3946;
@@ -88,7 +86,7 @@ var KEY='juniorBills.v1';
 var BUDGET_URL='https://gindisandbox.github.io/Junior-s-Budget/'; /* optional: web address of Junior's Budget; shows a link on the first screen when filled in */
 var CARS=['Car gas','Car insurance','Car maintenance'];
 var DTYPES=['Credit card','Car loan','Student loan','Other loan'];
-var VERSION='1.4';
+var VERSION='1.8';
 
 /* ---------- helpers ---------- */
 var app=document.getElementById('app');
@@ -101,7 +99,7 @@ function uid(){return 'b'+Date.now().toString(36)+Math.random().toString(36).sli
 function num(v){v=Number(v);return (isFinite(v)&&v>=0&&v<=1e9)?v:0;}
 function str(v,n){return typeof v==='string'?v.slice(0,n):'';}
 function money(x){return (x||0).toLocaleString('en-US',{style:'currency',currency:'USD'});}
-function parseNum(s){s=String(s).replace(/[$,%\s]/g,'');if(s==='')return null;var v=Number(s);return (isFinite(v)&&v>=0&&v<=1e9)?v:null;}
+function parseNum(s){s=String(s).replace(/[$%\s]/g,'');if(/^\d+,\d{1,2}$/.test(s))s=s.replace(',','.');else s=s.replace(/,/g,'');if(s===''||!/^(\d+\.?\d*|\.\d+)$/.test(s))return null;var v=Number(s);return (isFinite(v)&&v>=0&&v<=1e9)?v:null;}
 function todayStr(){var d=new Date(),p=function(n){return (n<10?'0':'')+n;};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
@@ -124,7 +122,7 @@ function numIn(id,val,ph){var i=h('input',{type:'text',inputmode:'decimal',id:id
 
 /* ---------- data: a small copy of each budget (names and amounts only) plus its bills ---------- */
 var db=[],storageOk=true,notice='';
-function cleanBills(a){return (Array.isArray(a)?a.slice(0,100):[]).map(function(x){x=x||{};var kd=['exp','extra','debt'].indexOf(x.kind)>=0?x.kind:'exp',dd=Math.round(Number(x.day));return {id:str(x.id,40)||uid(),kind:kd,ref:str(x.ref,60),day:(dd>=1&&dd<=31)?dd:1,paid:/^\d{4}-\d{2}$/.test(String(x.paid||''))?x.paid:'',added:str(x.added,10)};}).filter(function(x){return x.ref;});}
+function cleanBills(a){return (Array.isArray(a)?a.slice(0,100):[]).map(function(x){x=x||{};var kd=['exp','extra','debt'].indexOf(x.kind)>=0?x.kind:'exp',dd=Math.round(Number(x.day));var okKey=function(k){return /^\d{4}-\d{2}$/.test(String(k||''));};var pm=(Array.isArray(x.paidm)?x.paidm:[]).filter(okKey).map(String);if(okKey(x.paid)&&pm.indexOf(String(x.paid))<0)pm.push(String(x.paid));pm=pm.sort().slice(-12);return {id:str(x.id,40)||uid(),kind:kd,ref:str(x.ref,60),day:(dd>=1&&dd<=31)?dd:1,paid:pm.length?pm[pm.length-1]:'',paidm:pm,added:str(x.added,10)};}).filter(function(x){return x.ref;});}
 function clean(b){
   if(!b||typeof b!=='object')return null;
   var arr=function(x){return Array.isArray(x)?x.slice(0,100):[];};
@@ -133,13 +131,26 @@ function clean(b){
     expenses:arr(b.expenses).map(function(e){e=e||{};return {name:str(e.name,60),amount:num(e.amount)};}).filter(function(e){return e.name&&e.amount>0;}),
     extras:arr(b.extras).map(function(e){e=e||{};return {name:str(e.name,60),amount:num(e.amount)};}).filter(function(e){return e.name&&e.amount>0;}),
     debts:arr(b.debts).map(function(d){d=d||{};return {type:(DTYPES.indexOf(d.type)>=0?d.type:'Other loan'),name:str(d.name,60),payment:num(d.payment)};}).filter(function(d){return d.payment>0;}),
+    srcSaved:(Number(b.srcSaved)>0?Number(b.srcSaved):0),
     bills:cleanBills(b.bills)};}
 function load(){try{var r=localStorage.getItem(KEY);if(r){var o=JSON.parse(r);if(o&&Array.isArray(o.budgets))db=o.budgets.map(clean).filter(Boolean);}}catch(e){storageOk=false;}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify({budgets:db}));}catch(e){storageOk=false;}}
+var saveOk=true;
+function save(){try{localStorage.setItem(KEY,JSON.stringify({budgets:db}));saveOk=true;}catch(e){storageOk=false;saveOk=false;}return saveOk;}
 function upsert(b){var i=db.findIndex(function(x){return x.id===b.id;});if(i>=0)db[i]=b;else db.push(b);save();}
 /* opening a newer backup replaces the budget's names and amounts, and keeps the bills already set up */
+function itemsOf(bud,kind){var out=[];
+  if(kind==='exp')bud.expenses.forEach(function(e){out.push({ref:e.name,amt:e.amount});});
+  else if(kind==='extra')bud.extras.forEach(function(e){out.push({ref:e.name,amt:e.amount});});
+  else bud.debts.forEach(function(d){out.push({ref:d.name||d.type,amt:d.payment});});
+  return out;}
 function importBudget(c){var old=db.filter(function(x){return x.id===c.id;})[0];
-  if(old){var have={};old.bills.forEach(function(b){have[b.kind+'|'+b.ref]=1;});c.bills.forEach(function(b){if(!have[b.kind+'|'+b.ref])old.bills.push(b);});
+  if(old){
+    /* a bill whose item was renamed in the Budget: if exactly one unlinked item of the same kind has the same amount, follow it */
+    old.bills.forEach(function(b){if(billItem(b,c))return;var was=billItem(b,old);if(!was)return;
+      var taken={};old.bills.forEach(function(x){if(x.kind===b.kind)taken[x.ref]=1;});
+      var cand=itemsOf(c,b.kind).filter(function(i){return !taken[i.ref]&&Math.abs(i.amt-was.amt)<0.005;});
+      if(cand.length===1)b.ref=cand[0].ref;});
+    var have={};old.bills.forEach(function(b){have[b.kind+'|'+b.ref]=1;});c.bills.forEach(function(b){if(!have[b.kind+'|'+b.ref])old.bills.push(b);});
     c.bills=old.bills;}
   c.imported=todayStr();upsert(c);}
 
@@ -155,16 +166,25 @@ function billItem(b,bud){var a,i;
   else if(b.kind==='extra'){a=bud.extras;for(i=0;i<a.length;i++)if(a[i].name===b.ref)return {label:a[i].name,amt:a[i].amount};}
   else{a=bud.debts;for(i=0;i<a.length;i++)if((a[i].name||a[i].type)===b.ref)return {label:a[i].name||a[i].type,amt:a[i].payment};}
   return null;}
+function isPaid(b,key){return b.paid===key||(Array.isArray(b.paidm)&&b.paidm.indexOf(key)>=0);}
+function markPaid(b,key){var l=(Array.isArray(b.paidm)?b.paidm.slice():[]);if(b.paid&&l.indexOf(b.paid)<0)l.push(b.paid);if(l.indexOf(key)<0)l.push(key);l.sort();b.paidm=l.slice(-12);b.paid=b.paidm[b.paidm.length-1];}
+function unmarkPaid(b,key){var l=(Array.isArray(b.paidm)?b.paidm:[]).filter(function(k){return k!==key;});b.paidm=l;b.paid=l.length?l[l.length-1]:'';}
 function billStatus(b,now){
   var t=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12),y=t.getFullYear(),m=t.getMonth();
-  var d0=dueOn(b.day,y,m),paid=(b.paid===mkKey(d0)),added=b.added?new Date(b.added+'T12:00:00'):null;
-  var days=Math.round((d0-t)/864e5),n,nd;
-  if(d0<t&&!paid&&(!added||d0>=added))return {state:'overdue',days:-days,due:d0,key:mkKey(d0)};
+  var d0=dueOn(b.day,y,m),paid=isPaid(b,mkKey(d0)),added=b.added?new Date(b.added+'T12:00:00'):null;
+  var days=Math.round((d0-t)/864e5),n,nd,k,dk;
+  /* any month since the bill was added (up to 12 back) that was never marked paid stays overdue; they are grouped into one line */
+  var missed=[];for(k=12;k>=0;k--){dk=dueOn(b.day,y,m-k);if(dk<t&&!isPaid(b,mkKey(dk))&&added&&dk>=added)missed.push({due:dk,key:mkKey(dk)});}
+  if(!added&&!isPaid(b,mkKey(dueOn(b.day,y,m-1)))&&dueOn(b.day,y,m-1)<t)missed.push({due:dueOn(b.day,y,m-1),key:mkKey(dueOn(b.day,y,m-1))});
+  if(!added&&d0<t&&!paid)missed.push({due:d0,key:mkKey(d0)});
+  if(missed.length)return {state:'overdue',days:Math.round((t-missed[0].due)/864e5),due:missed[0].due,key:missed[0].key,missed:missed,count:missed.length};
   if(d0>=t&&!paid)return days<=BILL_DAYS?{state:'soon',days:days,due:d0,key:mkKey(d0)}:{state:'later',days:days,due:d0,key:mkKey(d0)};
   n=dueOn(b.day,y,m+1);nd=Math.round((n-t)/864e5);
-  if(nd<=BILL_DAYS)return {state:'soon',days:nd,due:n,key:mkKey(n)};
-  return {state:paid?'paid':'later',days:nd,due:n,key:mkKey(n),paidNow:paid};}
+  var nextPaid=isPaid(b,mkKey(n));
+  if(nd<=BILL_DAYS&&!nextPaid)return {state:'soon',days:nd,due:n,key:mkKey(n)};
+  return {state:(paid||nextPaid)?'paid':'later',days:nd,due:n,key:mkKey(n),paidNow:paid};}
 function whenText(s){
+  if(s.state==='overdue'&&s.count>1)return 'OVERDUE: '+s.count+' months not marked paid ('+s.missed.map(function(x){return MS[x.due.getMonth()];}).join(', ')+'). The oldest was due '+dShort(s.due)+'.';
   if(s.state==='overdue')return 'OVERDUE: was due '+dShort(s.due);
   if(s.state==='soon')return s.days===0?'Due today':(s.days===1?'Due tomorrow, '+dShort(s.due):'Due '+dShort(s.due)+' (in '+s.days+' days)');
   if(s.state==='paid')return 'Paid for this month. Next due '+dShort(s.due);
@@ -173,30 +193,37 @@ function billLines(){var out=[],now=new Date();
   db.forEach(function(bud){(bud.bills||[]).forEach(function(b){var it=billItem(b,bud);if(!it||!(it.amt>0))return;var s=billStatus(b,now);if(s.state==='overdue'||s.state==='soon')out.push({bud:bud,b:b,it:it,s:s});});});
   out.sort(function(x,y){var a=x.s.state==='overdue'?-1000-x.s.days:x.s.days,c=y.s.state==='overdue'?-1000-y.s.days:y.s.days;return a-c;});
   return out;}
+function overdueBtns(b,s,after){
+  if(s.state==='overdue'&&s.count>1)return h('div',{class:'stack'},
+    h('button',{class:'green',onclick:function(){s.missed.forEach(function(x){markPaid(b,x.key);});after();},text:'Mark all paid ('+s.count+' months)'}),
+    h('button',{class:'ghost',onclick:function(){markPaid(b,s.key);after();},text:'Mark only the oldest paid'}));
+  return h('button',{class:'ghost',onclick:function(){markPaid(b,s.key);after();},text:'Mark paid'});}
 function billBanner(){var L=billLines();if(!L.length)return null;
   var card=h('div',{class:'card warn'},h('h2',{text:'Bills due'}));
   L.slice(0,5).forEach(function(x){
     card.append(h('div',{class:'stack'},h('p',{},h('span',{class:'pill '+(x.s.state==='overdue'?'bad':'soon'),text:x.s.state==='overdue'?'Overdue':'Due soon'}),
       x.it.label+(db.length>1?' ('+x.bud.name+')':'')+': '+money(x.it.amt)+'. '+whenText(x.s)),
-      h('button',{class:'ghost',onclick:function(){x.b.paid=x.s.key;upsert(x.bud);home();},text:'Mark paid'})));});
+      overdueBtns(x.b,x.s,function(){upsert(x.bud);home();})));});
   if(L.length>5)card.append(h('p',{class:'hint',text:'And '+(L.length-5)+' more. Open a budget to see them all.'}));
   return card;}
 var status=h('p',{class:'note',role:'status'});
 function billsScreen(){
   status.textContent='';
-  app.append(h('h1',{text:cur.name}),h('p',{class:'hint',text:'Amounts come from your budget copy (opened '+cur.imported+'), so nothing is counted twice. If you change an amount in Junior\'s Budget, save a new backup there and open it here.'}));
+  app.append(h('h1',{text:cur.name}),h('p',{class:'hint',text:'Amounts come from your budget copy (opened '+cur.imported+'), so nothing is counted twice. If you change an amount in Junior\'s Budget, save a new copy there and open it here.'}));
   var now=new Date();
   if(!cur.bills.length)app.append(h('p',{class:'hint',text:'No bills yet. Tap Add a bill.'}));
   cur.bills.forEach(function(b){var it=billItem(b,cur),box=h('div',{class:'card'});
-    if(!it||!(it.amt>0)){box.append(h('h2',{text:b.ref}),h('p',{class:'warn',text:'This is not in your budget copy with an amount anymore, so no reminders will show. Open a newer backup or remove this bill.'}),
-      h('button',{class:'danger',onclick:function(){cur.bills=cur.bills.filter(function(x){return x.id!==b.id;});upsert(cur);jump(billsScreen);},text:'Remove this bill'}));}
-    else{var s=billStatus(b,now),isPaidNow=(b.paid===mkKey(s.due))||s.state==='paid';
+    if(!it||!(it.amt>0)){box.append(h('h2',{text:b.ref}),h('p',{class:'warn',text:'This is not in your budget copy with an amount anymore, so no reminders will show. If you renamed it in Junior\'s Budget, tap It was renamed.'}),
+      h('button',{class:'green',style:'margin-bottom:12px',onclick:function(){go(billRelink,{id:b.id});},text:'It was renamed'}),
+      h('button',{class:'danger',onclick:function(){go(billRemoveAsk,{id:b.id});},text:'Remove this bill'}));}
+    else{var s=billStatus(b,now),isPaidNow=(s.state==='paid')||isPaid(b,s.key),actKey=(s.state==='paid')?(isPaid(b,s.key)?s.key:mkKey(dueOn(b.day,now.getFullYear(),now.getMonth()))):s.key;
       box.append(h('h2',{text:it.label}),h('div',{class:'money'},h('span',{text:'Each month'}),h('b',{text:money(it.amt)})),
         h('p',{},h('span',{class:'pill '+(s.state==='overdue'?'bad':(s.state==='soon'?'soon':'ok')),text:s.state==='overdue'?'Overdue':(s.state==='soon'?'Due soon':(s.state==='paid'?'Paid':'On track'))}),'Due on the '+ord(b.day)+' of each month. '+whenText(s)),
         h('div',{class:'stack'},
-          h('button',{class:isPaidNow?'ghost':'green',onclick:function(){b.paid=isPaidNow?'':s.key;upsert(cur);jump(billsScreen);},text:isPaidNow?'Undo paid':'Mark paid'}),
+          (s.state==='overdue'&&s.count>1)?overdueBtns(b,s,function(){upsert(cur);jump(billsScreen);}):null,
+          (s.state==='overdue'&&s.count>1)?null:h('button',{class:isPaidNow?'ghost':'green',onclick:function(){if(isPaidNow)unmarkPaid(b,actKey);else markPaid(b,actKey);upsert(cur);jump(billsScreen);},text:isPaidNow?'Undo paid':'Mark paid'}),
           h('button',{class:'ghost',onclick:function(){go(billDay,{id:b.id});},text:'Change the day'}),
-          h('button',{class:'ghost',onclick:function(){cur.bills=cur.bills.filter(function(x){return x.id!==b.id;});upsert(cur);jump(billsScreen);},text:'Remove this bill'})));}
+          h('button',{class:'ghost',onclick:function(){go(billRemoveAsk,{id:b.id});},text:'Remove this bill'})));}
     app.append(box);});
   app.append(h('div',{class:'stack'},h('button',{class:'green',onclick:function(){go(billPick);},text:'Add a bill'})));
   if(cur.bills.length)app.append(h('div',{class:'card',style:'margin-top:16px'},h('h2',{text:'Reminders on your phone (optional)'}),
@@ -206,8 +233,19 @@ function billsScreen(){
     BUDGET_URL?h('a',{class:'btn ghost',href:BUDGET_URL,style:'display:block;text-decoration:none;line-height:34px',text:"Open Junior's Budget"}):null,
     h('button',{class:'ghost',onclick:function(){go(removeBudget);},text:'Remove this budget from here'})));}
 function removeBudget(){app.append(h('div',{class:'card'},h('h2',{text:'Remove "'+cur.name+'" from here?'}),
-  h('p',{class:'hint',text:'This removes its bills and due dates from Junior\'s Bills. Your budget in Junior\'s Budget is not touched. You can open the backup again later, but the bills would need to be set up again.'}),
+  h('p',{class:'hint',text:'This removes its bills and due dates from Junior\'s Bills. Your budget in Junior\'s Budget is not touched. You can open the saved copy again later, but the bills would need to be set up again.'}),
   h('div',{class:'stack'},h('button',{class:'danger',onclick:function(){var id=cur.id;db=db.filter(function(x){return x.id!==id;});save();home();},text:'Yes, remove it'}),h('button',{class:'ghost',onclick:back,text:'No, keep it'}))));}
+function billRemoveAsk(arg){var b=cur.bills.filter(function(x){return x.id===arg.id;})[0];if(!b){back();return;}
+  app.append(h('div',{class:'card'},h('h2',{text:'Remove "'+b.ref+'"?'}),h('p',{class:'hint',text:'This takes it off your list and stops its reminders. Your budget is not changed.'}),
+    h('div',{class:'stack'},h('button',{class:'danger',onclick:function(){cur.bills=cur.bills.filter(function(x){return x.id!==b.id;});upsert(cur);hist=[];show([billsScreen]);},text:'Yes, remove it'}),h('button',{class:'ghost',onclick:back,text:'No, keep it'}))));}
+function billRelink(arg){
+  var b=cur.bills.filter(function(x){return x.id===arg.id;})[0];if(!b){back();return;}
+  var taken={};cur.bills.forEach(function(x){if(x.kind===b.kind)taken[x.ref]=1;});
+  var opts=itemsOf(cur,b.kind).filter(function(i){return i.ref&&i.amt>0&&!taken[i.ref];});
+  app.append(h('h1',{text:'Which one is it now?'}),h('p',{class:'hint',text:'"'+b.ref+'" is gone from your budget copy. Pick its new name. Your due day and paid marks are kept.'}));
+  if(!opts.length)app.append(h('p',{class:'hint',text:'Nothing to pick. Open a newer saved copy from Junior\'s Budget, or remove this bill.'}));
+  opts.forEach(function(o){app.append(h('button',{class:'choice',style:'width:100%;margin-bottom:10px',onclick:function(){b.ref=o.ref;upsert(cur);hist=[];show([billsScreen]);}},h('span',{text:o.ref}),h('br'),h('span',{class:'hint',text:money(o.amt)+' a month'})));});
+  app.append(h('button',{class:'ghost',style:'width:100%',onclick:back,text:'Back'}));}
 function billPick(){
   var linked={};cur.bills.forEach(function(b){linked[b.kind+'|'+b.ref]=1;});var opts=[];
   cur.expenses.forEach(function(e){if(!(cur.hasCar===false&&CARS.indexOf(e.name)>=0)&&!linked['exp|'+e.name])opts.push({kind:'exp',ref:e.name,label:e.name,amt:e.amount});});
@@ -216,13 +254,13 @@ function billPick(){
   app.append(h('h1',{text:'Add a bill'}),h('p',{class:'hint',text:'Which one is a bill with a due date? These are the expenses and debt payments in your budget.'}));
   if(!opts.length)app.append(h('p',{class:'hint',text:'Nothing left to add. Every expense and debt payment with an amount is already a bill.'}));
   opts.forEach(function(o){app.append(h('button',{class:'choice',style:'width:100%;margin-bottom:10px',onclick:function(){go(billDay,{kind:o.kind,ref:o.ref});}},h('span',{text:o.label}),h('br'),h('span',{class:'hint',text:money(o.amt)+' a month'})));});
-  app.append(h('div',{class:'card warn',style:'margin-top:6px'},h('p',{style:'margin:0 0 8px;font-weight:700',text:'Bill not listed?'}),h('p',{class:'hint',style:'margin:0',text:'Go back to Junior\'s Budget and add it as an expense with an amount (or as a debt). Save a new backup there. Then return here and open that backup.'}),BUDGET_URL?h('a',{class:'btn ghost',href:BUDGET_URL,style:'display:block;text-decoration:none;line-height:34px;margin-top:12px',text:"Open Junior's Budget"}):null),
+  app.append(h('div',{class:'card warn',style:'margin-top:6px'},h('p',{style:'margin:0 0 8px;font-weight:700',text:'Bill not listed?'}),h('p',{class:'hint',style:'margin:0',text:'Go back to Junior\'s Budget and add it as an expense with an amount (or as a debt). Save a new copy there. Then return here and open that copy.'}),BUDGET_URL?h('a',{class:'btn ghost',href:BUDGET_URL,style:'display:block;text-decoration:none;line-height:34px;margin-top:12px',text:"Open Junior's Budget"}):null),
     h('button',{class:'ghost',style:'width:100%',onclick:back,text:'Back'}));}
 function billDay(arg){
   var ex=arg.id?cur.bills.filter(function(x){return x.id===arg.id;})[0]:null,nm=ex?ex.ref:arg.ref;
   ask({eyebrow:'Bills',title:'Which day of the month is "'+nm+'" due?',hint:'Type a number from 1 to 31. If a month is shorter, the last day of that month is used.',label:'Day of the month',input:numIn('f-bday',ex?ex.day:'','Example: 5'),
     onNext:function(v){var n=parseNum(v);if(n===null||n!==Math.floor(n)||n<1||n>31)return 'Type a day from 1 to 31, like 5.';
-      if(ex)ex.day=n;else cur.bills.push({id:uid(),kind:arg.kind,ref:arg.ref,day:n,paid:'',added:todayStr()});
+      if(ex)ex.day=n;else cur.bills.push({id:uid(),kind:arg.kind,ref:arg.ref,day:n,paid:'',paidm:[],added:todayStr()});
       upsert(cur);hist=[];show([billsScreen]);}});}
 
 /* ---------- calendar file ---------- */
@@ -233,7 +271,7 @@ function icsText(bud,now){var p2=function(n){return (n<10?'0':'')+n;},ymd=functi
   t=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12),L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Junior\'s Bills//Bills//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
   bud.bills.forEach(function(b){var it=billItem(b,bud);if(!it||!(it.amt>0))return;
     for(var i=0;i<12;i++){var d=dueOn(b.day,t.getFullYear(),t.getMonth()+i);if(d<t)continue;
-      L.push('BEGIN:VEVENT','UID:bill-'+b.id+'-'+mkKey(d).replace('-','')+'@juniors-budget','DTSTAMP:'+stamp,'DTSTART;VALUE=DATE:'+ymd(d),
+      L.push('BEGIN:VEVENT','UID:bill-'+String(b.id).replace(/[^A-Za-z0-9]/g,'')+'-'+mkKey(d).replace('-','')+'@juniors-budget','DTSTAMP:'+stamp,'DTSTART;VALUE=DATE:'+ymd(d),
         'SUMMARY:'+icsEsc('Bill due: '+it.label+' ('+money(it.amt)+')'),'DESCRIPTION:'+icsEsc('From Junior\'s Bills: '+bud.name),'TRANSP:TRANSPARENT',
         'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:Bill due tomorrow','TRIGGER:-PT15H','END:VALARM',
         'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:Bill due today','TRIGGER:PT9H','END:VALARM','END:VEVENT');}});
@@ -251,10 +289,20 @@ function staleBudget(){var worst=null,now=new Date();db.forEach(function(b){var 
 
 /* ---------- open a budget backup / save my bills ---------- */
 function backupJson(){return JSON.stringify({app:'JuniorBills',version:1,saved:new Date().toISOString(),budgets:db},null,2);}
-function loadText(t,status){try{var o=JSON.parse(t);var list=Array.isArray(o)?o:(o&&Array.isArray(o.budgets)?o.budgets:(o&&o.incomes?[o]:null));
-    if(!list)throw new Error('x');var n=0;list.forEach(function(b){var c=clean(b);if(c){importBudget(c);n++;}});
-    status.textContent=n?('Opened '+n+' budget'+(n===1?'':'s')+'. Tap Back to home to see it.'):'That file had no budgets in it.';return n;}
-  catch(e){status.textContent='That does not look like a Junior\'s Budget backup.';return 0;}}
+function loadText(t,status,force,after){var o;try{o=JSON.parse(t);}catch(e){status.textContent='That does not look like a Junior\'s Budget backup.';return 0;}
+  if(o&&typeof o==='object'&&!Array.isArray(o)&&o.app&&o.app!=='JuniorBudget'&&o.app!=='JuniorBills'){status.textContent='That file is not from Junior\'s Budget.';return 0;}
+  var list=Array.isArray(o)?o:(o&&Array.isArray(o.budgets)?o.budgets:null);
+  if(!list||!list.some(function(b){return b&&typeof b==='object'&&Array.isArray(b.expenses);})){status.textContent=(list&&!list.length)?'That file had no budgets in it.':'That does not look like a Junior\'s Budget backup.';return 0;}
+  var saved=Date.parse(o&&o.saved)||0,cs=[];
+  list.forEach(function(b){var c=clean(b);if(c){if(!(o&&o.app==='JuniorBills'&&c.srcSaved))c.srcSaved=saved;cs.push(c);}});
+  var older=cs.some(function(c){var old=db.filter(function(x){return x.id===c.id;})[0];return old&&old.srcSaved&&c.srcSaved&&c.srcSaved<old.srcSaved-60000;});
+  if(older&&!force){status.textContent='';
+    var box=h('div',{class:'card warn'},h('p',{style:'font-weight:700',text:'This backup is OLDER than the budget already here.'}),h('p',{class:'hint',text:'Opening it will put older amounts back. Your bills and due dates are kept.'}),
+      h('div',{class:'stack'},h('button',{class:'danger',onclick:function(){box.remove();var n=loadText(t,status,true);if(after)after(n);},text:'Open the older backup anyway'}),h('button',{class:'ghost',onclick:function(){box.remove();status.textContent='Kept the budget that was already here.';window.scrollTo(0,0);},text:'No, keep what I have'})));
+    status.before(box);window.scrollTo(0,0);return -1;}
+  var n=0;cs.forEach(function(c){importBudget(c);n++;});
+  if(!saveOk){status.textContent='This phone would not keep it. Nothing was saved. Try again, or use a different browser.';return 0;}
+  status.textContent=n?('Opened '+n+' budget'+(n===1?'':'s')+'. Tap Back to home to see it.'):'That file had no budgets in it.';return n;}
 function backupScreen(){
   hist=[];view=[backupScreen];app.textContent='';
   var status=h('p',{class:'note',role:'status',style:'font-weight:700'});
@@ -262,14 +310,14 @@ function backupScreen(){
   var inp=h('textarea',{id:'f-in','aria-label':'Paste backup text here',placeholder:'Paste backup text here'});
   var file=h('input',{type:'file',id:'f-file',accept:'.json,application/json,text/plain'});
   function done(n){if(n){notice='Opened your budget. Tap it below to add bills and due dates.';home();}else{window.scrollTo(0,0);}}
-  file.addEventListener('change',function(){var f=file.files&&file.files[0];if(!f)return;status.textContent='Reading '+f.name+'...';var rd=new FileReader();rd.onerror=function(){status.textContent='Could not read that file. Try Copy backup text and paste it instead.';window.scrollTo(0,0);};rd.onload=function(){var n=loadText(String(rd.result),status);file.value='';done(n);};rd.readAsText(f);});
+  file.addEventListener('change',function(){var f=file.files&&file.files[0];if(!f)return;status.textContent='Reading '+f.name+'...';var rd=new FileReader();rd.onerror=function(){status.textContent='Could not read that file. Try Copy backup text and paste it instead.';window.scrollTo(0,0);};rd.onload=function(){var n=loadText(String(rd.result),status,false,done);file.value='';if(n!==-1)done(n);};rd.readAsText(f);});
   app.append(h('h1',{text:'Open or save'}),status,
     h('div',{class:'card'},h('h2',{text:'Open my budget'}),
       h('p',{class:'hint',text:'In Junior\'s Budget, tap Save or load a backup, then Save a file to my phone. Come back here and choose that file. Opening a newer file later updates the amounts and keeps your bills.'}),
       h('div',{class:'stack'},h('label',{for:'f-file',text:'Choose a budget backup file'}),file,
         h('label',{for:'f-in',text:'Or paste backup text'}),inp,
-        h('button',{onclick:function(){if(inp.value.trim()){done(loadText(inp.value,status));}else{status.textContent='Paste backup text first, or choose a file.';window.scrollTo(0,0);}},text:'Open pasted text'}))),
-    h('div',{class:'card'},h('h2',{text:'Save a backup of my bills'}),
+        h('button',{onclick:function(){if(inp.value.trim()){var n=loadText(inp.value,status,false,done);if(n!==-1)done(n);}else{status.textContent='Paste backup text first, or choose a file.';window.scrollTo(0,0);}},text:'Open pasted text'}))),
+    h('div',{class:'card'},h('h2',{text:'Save a copy of my bills'}),
       h('p',{class:'hint',text:'This keeps a copy of your bills and due dates in case this phone clears its data. You can open it here again later.'}),
       h('div',{class:'stack'},
         h('button',{onclick:function(){try{var bl=new Blob([backupJson()],{type:'application/json'});var u=URL.createObjectURL(bl);var a=document.createElement('a');a.href=u;a.download='juniors-bills-backup.json';document.body.append(a);a.click();a.remove();markBackup();setTimeout(function(){URL.revokeObjectURL(u);},2000);status.textContent='If a file did not download, use Copy backup text instead.';}catch(e){status.textContent='Download is blocked here. Use Copy backup text instead.';}},text:'Save a file to my phone'}),
@@ -278,15 +326,26 @@ function backupScreen(){
         out)),
     h('button',{class:'ghost',style:'width:100%',onclick:home,text:'Back to home'}));}
 
+/* ---------- how it works ---------- */
+function howScreen(){
+  function ol(a){return h('ol',{class:'hint',style:'padding-left:24px;margin:0 0 4px'},a.map(function(t){return h('li',{style:'margin-bottom:6px',text:t});}));}
+  app.append(h('h1',{text:'How it works'}),
+    h('div',{class:'card'},h('h2',{text:'First time'}),ol(['In Junior\'s Budget, save a backup (Save or load a backup, then Save a file to my phone).','Come back here and tap Open my budget.','Choose that file. Your budget appears on the home screen.','Tap your budget.'])),
+    h('div',{class:'card'},h('h2',{text:'Add a bill'}),ol(['Tap Add a bill and pick it from the list.','Type the day of the month it is due.','Bills due in the next 7 days show as Due soon on the home screen.','Tap Mark paid when you pay it. It comes back next month.'])),
+    h('div',{class:'card warn'},h('h2',{text:'Bill not listed?'}),h('p',{class:'hint',text:'Open Junior\'s Budget and add it as an expense with an amount (or as a debt). Save a new copy. Come back here and open that copy. Your bills and due dates are kept.'})),
+    h('div',{class:'card'},h('h2',{text:'Phone reminders (optional)'}),h('p',{class:'hint',text:'On a budget\'s screen tap Make a calendar file, then open it. Your phone offers to add each bill to your calendar with an alert the day before and the day of.'})),
+    h('div',{class:'card'},h('h2',{text:'Keep it safe'}),h('p',{class:'hint',text:'Tap Open or save, then Save a file to my phone. This app reminds you every 14 days.'})),
+    h('div',{class:'card warn'},h('h2',{text:'Put it on your Home Screen (iPhone)'}),h('p',{class:'hint',text:'This is not an App Store download. It is a web page. Adding it to your Home Screen just puts an icon on your phone.'}),ol(['First, save a copy of your bills (Open or save, then Save a file to my phone).','Open this page in Safari.','Tap the Share button (a square with an arrow).','Scroll down. Tap Add to Home Screen.','Tap Add.','Open the new icon. It starts empty.','In the new icon, tap Open or save and choose your saved copy.','From now on, use only the new icon.'])),
+    h('button',{class:'ghost',style:'width:100%',onclick:home,text:'Back'}));}
 /* ---------- home ---------- */
 function home(){
   hist=[];view=null;cur=null;app.textContent='';
   app.append(h('h1',{text:"Junior's Bills"}),h('p',{class:'hint',text:'Due dates and reminders for the bills in your Junior\'s Budget. Everything is saved only on this phone.'}));
-  if(!storageOk)app.append(h('div',{class:'card warn'},h('p',{text:'This phone is not letting the page save. Use Open or save to keep a backup file.'})));
+  if(!storageOk)app.append(h('div',{class:'card warn'},h('p',{text:'This phone is not letting the page save. Use Open or save to keep a saved file.'})));
   if(notice){app.append(h('div',{class:'card',style:'border-left:6px solid var(--green);padding-left:12px'},h('p',{style:'margin:0;font-weight:700',text:notice})));notice='';}
   var bn=billBanner();if(bn)app.append(bn);
-  var st=staleBudget();if(st)app.append(h('div',{class:'card warn'},h('p',{text:'Your copy of "'+st.name+'" is '+st.days+' days old. If you changed your budget since then, save a new backup in Junior\'s Budget and open it here.'}),h('button',{class:'ghost',onclick:backupScreen,text:'Open a newer backup'})));
-  var due=backupDue();if(due)app.append(h('div',{class:'card warn'},h('p',{text:(due.never?'You have not saved a backup of your bills yet. ':'It has been '+due.days+' days since your last backup. ')+'A backup protects your due dates if this phone clears its data.'}),h('div',{class:'row'},h('button',{class:'green',onclick:backupScreen,text:'Back up now'}),h('button',{class:'ghost',onclick:function(){lsSet(SN,String(Date.now()+3*864e5));home();},text:'Remind me in 3 days'}))));
+  var st=staleBudget();if(st)app.append(h('div',{class:'card warn'},h('p',{text:'Your copy of "'+st.name+'" is '+st.days+' days old. If you changed your budget since then, save a new copy in Junior\'s Budget and open it here.'}),h('button',{class:'ghost',onclick:backupScreen,text:'Open a newer saved copy'})));
+  var due=backupDue();if(due)app.append(h('div',{class:'card warn'},h('p',{text:(due.never?'You have not saved a copy of your bills yet. ':'It has been '+due.days+' days since your last saved copy. ')+'A saved copy protects your due dates if this phone clears its data.'}),h('div',{class:'row'},h('button',{class:'green',onclick:backupScreen,text:'Back up now'}),h('button',{class:'ghost',onclick:function(){lsSet(SN,String(Date.now()+3*864e5));home();},text:'Remind me in 3 days'}))));
   if(!db.length){
     app.append(h('div',{class:'card'},h('h2',{text:'Start here'}),
       h('ol',{class:'hint',style:'padding-left:22px;margin:0 0 14px'},h('li',{text:'Open Junior\'s Budget and finish your budget.'}),h('li',{text:'There, tap Save or load a backup, then Save a file to my phone.'}),h('li',{text:'Come back here and tap Open my budget.'})),
@@ -295,8 +354,8 @@ function home(){
     var list=h('div',{class:'stack'});
     db.forEach(function(b){var n=b.bills.length;list.append(h('button',{class:'choice',onclick:function(){cur=b;hist=[];show([billsScreen]);}},h('span',{text:b.name}),h('br'),h('span',{class:'hint',text:n?n+' bill'+(n===1?'':'s'):'No bills yet'})));});
     app.append(h('div',{class:'card'},h('h2',{text:'Your budgets'}),list));}
-  app.append(h('div',{class:'stack'},h('button',{class:db.length?'ghost':'green',onclick:backupScreen,text:db.length?'Open or save':'Open my budget'}),db.length&&BUDGET_URL?h('a',{class:'btn ghost',href:BUDGET_URL,style:'display:block;text-decoration:none;line-height:34px',text:"Open Junior's Budget"}):null),
-    h('p',{class:'note',style:'margin-top:18px',text:'Tip: add this page to your Home Screen so it opens like an app (on iPhone, tap the Share button, then Add to Home Screen). Nobody else can see your bills.'}),h('p',{class:'note',text:'Version '+VERSION}));}
+  app.append(h('div',{class:'stack'},h('button',{class:db.length?'ghost':'green',onclick:backupScreen,text:db.length?'Open or save':'Open my budget'}),db.length&&BUDGET_URL?h('a',{class:'btn ghost',href:BUDGET_URL,style:'display:block;text-decoration:none;line-height:34px',text:"Open Junior's Budget"}):null,h('button',{class:'ghost',onclick:function(){show([howScreen]);},text:'How it works'})),
+    h('p',{class:'note',style:'margin-top:18px',text:'Tip: add this page to your Home Screen so it opens like an app (on iPhone, tap the Share button, then Add to Home Screen). The new icon starts empty, so save a backup first and load it in the icon. Nobody else can see your bills.'}),h('p',{class:'note',text:'Version '+VERSION}));}
 
 if(!lsGet(FS))lsSet(FS,String(Date.now()));
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
